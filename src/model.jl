@@ -151,6 +151,31 @@ function _add_con_powerbalance(m, case::Case, storage::Storage, hour_idx,
 end
 
 
+function _add_cons_storage_soc(m, storage::Storage, num_hour, storage_e0,
+                               storage_chg, storage_dis, storage_soc)
+    println("storage soc_tracking: ", Dates.now())
+    # Build helper parameters
+    storage_idx = 1:size(storage.gen, 1)
+
+    JuMP.@constraint(m,
+        soc_tracking[i in storage_idx, h in 1:(num_hour-1)],
+        storage_soc[i, h+1] == (
+            storage_soc[i, h]
+            + storage.sd_table.InEff[i] * storage_chg[i, h+1]
+            - (1 / storage.sd_table.OutEff[i]) * storage_dis[i, h+1]),
+        container=Array)
+    println("storage initial_soc: ", Dates.now())
+    JuMP.@constraint(m,
+        initial_soc[i in storage_idx],
+        storage_soc[i, 1] == (
+            storage_e0[i]
+            + storage.sd_table.InEff[i] * storage_chg[i, 1]
+            - (1 / storage.sd_table.OutEff[i]) * storage_dis[i, 1]),
+        container=Array)
+    return soc_tracking, initial_soc
+end
+
+
 """
     _build_model(case=case, start_index=x, interval_length=y[, kwargs...])
 
@@ -280,28 +305,12 @@ function _build_model(; case::Case, storage::Storage,
             m, case, storage, hour_idx,
             pg, pf, storage_chg, storage_dis,
             bus_demand, load_shed_enabled)
+        soc_tracking, initial_soc =_add_cons_storage_soc(
+            m, storage, num_hour, storage_e0,
+            storage_chg, storage_dis, storage_soc)
     else
         powerbalance = _add_con_powerbalance(
             m, case, hour_idx, pg, pf, bus_demand, load_shed_enabled)
-    end
-
-    if storage_enabled
-        println("storage soc_tracking: ", Dates.now())
-        JuMP.@constraint(m,
-            soc_tracking[i in storage_idx, h in 1:(num_hour-1)],
-            storage_soc[i, h+1] == (
-                storage_soc[i, h]
-                + storage.sd_table.InEff[i] * storage_chg[i, h+1]
-                - (1 / storage.sd_table.OutEff[i]) * storage_dis[i, h+1]),
-            container=Array)
-        println("storage initial_soc: ", Dates.now())
-        JuMP.@constraint(m,
-            initial_soc[i in storage_idx],
-            storage_soc[i, 1] == (
-                storage_e0[i]
-                + storage.sd_table.InEff[i] * storage_chg[i, 1]
-                - (1 / storage.sd_table.OutEff[i]) * storage_dis[i, 1]),
-            container=Array)
     end
 
     noninf_ramp_idx = findall(case.gen_ramp30 .!= Inf)
