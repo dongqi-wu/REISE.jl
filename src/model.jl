@@ -84,6 +84,73 @@ function _build_segment_slope(case::Case, segment_idx, segment_width)::Matrix
 end
 
 
+function _build_powerbalance_injections_withdrawls(m, case::Case, pg, pf,
+                                                   bus_demand,
+                                                   load_shed_enabled)
+    gen_map = _make_gen_map(case)
+    branch_map = _make_branch_map(case)
+    gen_injections = JuMP.@expression(m, gen_map * pg)
+    line_injections = JuMP.@expression(m, branch_map * pf)
+    injections = JuMP.@expression(m, gen_injections + line_injections)
+    if load_shed_enabled
+        injections = JuMP.@expression(m, injections + load_shed)
+    end
+    withdrawls = JuMP.@expression(m, bus_demand)
+    return injections, withdrawls
+end
+
+
+"""Call without storage enabled"""
+function _add_con_powerbalance(m, case::Case, hour_idx,
+                               pg, pf, bus_demand, load_shed_enabled)
+    println("powerbalance: ", Dates.now())
+    # Build helper parameters
+    bus_idx = 1:length(case.busid)
+
+    # Build constraint
+    injections, withdrawls = _build_powerbalance_injections_withdrawls(
+        m, case, pg, pf, bus_demand, load_shed_enabled)
+    JuMP.@constraint(m, powerbalance, (injections .== withdrawls))
+    println("powerbalance, setting names: ", Dates.now())
+    for i in bus_idx, j in hour_idx
+        JuMP.set_name(powerbalance[i, j],
+                      "powerbalance[" * string(i) * "," * string(j) * "]")
+    end
+    return powerbalance
+end
+
+
+"""Call with storage enabled"""
+function _add_con_powerbalance(m, case::Case, storage::Storage, hour_idx,
+                               pg, pf, storage_chg, storage_dis,
+                               bus_demand, load_shed_enabled)
+    println("powerbalance: ", Dates.now())
+    # Build helper parameters
+    bus_idx = 1:length(case.busid)
+    num_bus = length(case.busid)
+    num_storage = size(storage.gen, 1)
+    storage_idx = 1:num_storage
+    bus_id2idx = Dict(case.busid .=> bus_idx)
+    storage_bus_idx = [bus_id2idx[b] for b in storage.gen[:, 1]]
+    storage_map = sparse(storage_bus_idx, storage_idx, 1, num_bus,
+                         num_storage)::SparseMatrixCSC
+
+    # Build constraint
+    injections, withdrawls = _build_powerbalance_injections_withdrawls(
+        m, case, pg, pf, bus_demand, load_shed_enabled)
+    # Modify expressions
+    injections = JuMP.@expression(m, injections + storage_map * storage_dis)
+    withdrawls = JuMP.@expression(m, withdrawls + storage_map * storage_chg)
+    JuMP.@constraint(m, powerbalance, (injections .== withdrawls))
+    println("powerbalance, setting names: ", Dates.now())
+    for i in bus_idx, j in hour_idx
+        JuMP.set_name(powerbalance[i, j],
+                      "powerbalance[" * string(i) * "," * string(j) * "]")
+    end
+    return powerbalance
+end
+
+
 """
     _build_model(case=case, start_index=x, interval_length=y[, kwargs...])
 
@@ -135,9 +202,6 @@ function _build_model(; case::Case, storage::Storage,
         storage_max_chg = -1 * storage.gen[:, PMIN]
         storage_min_energy = storage.sd_table.MinStorageLevel
         storage_max_energy = storage.sd_table.MaxStorageLevel
-        storage_bus_idx = [bus_id2idx[b] for b in storage.gen[:, 1]]
-        storage_map = sparse(storage_bus_idx, storage_idx, 1, num_bus,
-                             num_storage)::SparseMatrixCSC
     end
     # Subsets
     gen_wind_idx = gen_idx[findall(case.genfuel .== "wind")]
@@ -163,14 +227,11 @@ function _build_model(; case::Case, storage::Storage,
 
     println("parameters: ", Dates.now())
     # Parameters
-    # Generator topology matrix
-    gen_map = _make_gen_map(case)
     # Branch connectivity matrix
     all_branch_to = vcat(case.branch_to, case.dcline_to)
     all_branch_from = vcat(case.branch_from, case.dcline_from)
     branch_to_idx = Int64[bus_id2idx[b] for b in all_branch_to]
     branch_from_idx = Int64[bus_id2idx[b] for b in all_branch_from]
-    branch_map = _make_branch_map(case)
     # Demand by bus
     bus_demand = _make_bus_demand(case, start_index, end_index)
     bus_demand *= demand_scaling
@@ -214,23 +275,14 @@ function _build_model(; case::Case, storage::Storage,
     println("constraints: ", Dates.now())
     # Constraints
 
-    println("powerbalance: ", Dates.now())
-    gen_injections = JuMP.@expression(m, gen_map * pg)
-    line_injections = JuMP.@expression(m, branch_map * pf)
-    injections = JuMP.@expression(m, gen_injections + line_injections)
-    if load_shed_enabled
-        injections = JuMP.@expression(m, injections + load_shed)
-    end
-    withdrawls = JuMP.@expression(m, bus_demand)
     if storage_enabled
-        injections = JuMP.@expression(m, injections + storage_map * storage_dis)
-        withdrawls = JuMP.@expression(m, withdrawls + storage_map * storage_chg)
-    end
-    JuMP.@constraint(m, powerbalance, (injections .== withdrawls))
-    println("powerbalance, setting names: ", Dates.now())
-    for i in bus_idx, j in hour_idx
-        JuMP.set_name(powerbalance[i, j],
-                      "powerbalance[" * string(i) * "," * string(j) * "]")
+        powerbalance = _add_con_powerbalance(
+            m, case, storage, hour_idx,
+            pg, pf, storage_chg, storage_dis,
+            bus_demand, load_shed_enabled)
+    else
+        powerbalance = _add_con_powerbalance(
+            m, case, hour_idx, pg, pf, bus_demand, load_shed_enabled)
     end
 
     if storage_enabled
