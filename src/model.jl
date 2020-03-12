@@ -100,6 +100,28 @@ function _build_powerbalance_injections_withdrawls(m, case::Case, pg, pf,
 end
 
 
+function _add_vars_storage(m, storage::Storage, hour_idx)
+    # Positional indices from mpc.gen
+    PMAX = 9
+    PMIN = 10
+    storage_max_dis = storage.gen[:, PMAX]
+    storage_max_chg = -1 * storage.gen[:, PMIN]
+    storage_min_energy = storage.sd_table.MinStorageLevel
+    storage_max_energy = storage.sd_table.MaxStorageLevel
+    storage_idx = 1:size(storage.gen, 1)
+    JuMP.@variables(m, begin
+        (0 <= storage_chg[i in storage_idx, j in hour_idx]
+            <= storage_max_chg[i]), (container=Array)
+        (0 <= storage_dis[i in storage_idx, j in hour_idx]
+            <= storage_max_dis[i]), (container=Array)
+        (storage_min_energy[i]
+            <= storage_soc[i in storage_idx, j in hour_idx]
+            <= storage_max_energy[i]), (container=Array)
+    end)
+    return storage_chg, storage_dis, storage_soc
+end
+
+
 """Call without storage enabled"""
 function _add_con_powerbalance(m, case::Case, hour_idx,
                                pg, pf, bus_demand, load_shed_enabled)
@@ -245,16 +267,8 @@ function _build_model(; case::Case, storage::Storage,
     end_index = start_index + interval_length - 1
     num_hour = interval_length
     hour_idx = 1:interval_length
-    # If storage is present, build required sets & parameters
+    # Determine whether storage is present
     storage_enabled = (size(storage.gen, 1) > 0)
-    if storage_enabled
-        num_storage = size(storage.gen, 1)
-        storage_idx = 1:num_storage
-        storage_max_dis = storage.gen[:, PMAX]
-        storage_max_chg = -1 * storage.gen[:, PMIN]
-        storage_min_energy = storage.sd_table.MinStorageLevel
-        storage_max_energy = storage.sd_table.MaxStorageLevel
-    end
     # Subsets
     gen_wind_idx = gen_idx[findall(case.genfuel .== "wind")]
     gen_solar_idx = gen_idx[findall(case.genfuel .== "solar")]
@@ -313,15 +327,8 @@ function _build_model(; case::Case, storage::Storage,
             0 <= trans_viol[i in branch_idx, j in hour_idx], container=Array)
     end
     if storage_enabled
-        JuMP.@variables(m, begin
-            (0 <= storage_chg[i in storage_idx, j in hour_idx]
-                <= storage_max_chg[i]), (container=Array)
-            (0 <= storage_dis[i in storage_idx, j in hour_idx]
-                <= storage_max_dis[i]), (container=Array)
-            (storage_min_energy[i]
-                <= storage_soc[i in storage_idx, j in hour_idx]
-                <= storage_max_energy[i]), (container=Array)
-        end)
+        storage_chg, storage_dis, storage_soc = _add_vars_storage(
+            m, storage, hour_idx)
     end
 
     println("constraints: ", Dates.now())
