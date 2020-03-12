@@ -176,6 +176,33 @@ function _add_cons_storage_soc(m, storage::Storage, num_hour, storage_e0,
 end
 
 
+function _add_cons_initial_ramp(m, case::Case, noninf_ramp_idx, pg,
+                               initial_ramp_g0)
+    println("initial rampup: ", Dates.now())
+    JuMP.@constraint(m,
+        initial_rampup[i in noninf_ramp_idx],
+        pg[i, 1] - initial_ramp_g0[i] <= case.gen_ramp30[i] * 2)
+    println("initial rampdown: ", Dates.now())
+    JuMP.@constraint(m,
+        initial_rampdown[i in noninf_ramp_idx],
+        case.gen_ramp30[i] * -2 <= pg[i, 1] - initial_ramp_g0[i])
+    return initial_rampup, initial_rampdown
+end
+
+
+function _add_cons_interval_ramp(m, case::Case, noninf_ramp_idx, num_hour, pg)
+    println("rampup: ", Dates.now())
+    JuMP.@constraint(m,
+        rampup[i in noninf_ramp_idx, h in 1:(num_hour-1)],
+        pg[i, h+1] - pg[i, h] <= case.gen_ramp30[i] * 2)
+    println("rampdown: ", Dates.now())
+    JuMP.@constraint(m,
+        rampdown[i in noninf_ramp_idx, h in 1:(num_hour-1)],
+        case.gen_ramp30[i] * -2 <= pg[i, h+1] - pg[i, h])
+    return rampup, rampdown
+end
+
+
 """
     _build_model(case=case, start_index=x, interval_length=y[, kwargs...])
 
@@ -315,24 +342,12 @@ function _build_model(; case::Case, storage::Storage,
 
     noninf_ramp_idx = findall(case.gen_ramp30 .!= Inf)
     if initial_ramp_enabled
-        println("initial rampup: ", Dates.now())
-        JuMP.@constraint(m,
-            initial_rampup[i in noninf_ramp_idx],
-            pg[i, 1] - initial_ramp_g0[i] <= case.gen_ramp30[i] * 2)
-        println("initial rampdown: ", Dates.now())
-        JuMP.@constraint(m,
-            initial_rampdown[i in noninf_ramp_idx],
-            case.gen_ramp30[i] * -2 <= pg[i, 1] - initial_ramp_g0[i])
+        initial_rampup, initial_rampdown = _add_cons_initial_ramp(
+            m, case, noninf_ramp_idx, pg, initial_ramp_g0)
     end
     if length(hour_idx) > 1
-        println("rampup: ", Dates.now())
-        JuMP.@constraint(m,
-            rampup[i in noninf_ramp_idx, h in 1:(num_hour-1)],
-            pg[i, h+1] - pg[i, h] <= case.gen_ramp30[i] * 2)
-        println("rampdown: ", Dates.now())
-        JuMP.@constraint(m,
-            rampdown[i in noninf_ramp_idx, h in 1:(num_hour-1)],
-            case.gen_ramp30[i] * -2 <= pg[i, h+1] - pg[i, h])
+        rampup, rampdown = _add_cons_interval_ramp(
+            m, case, noninf_ramp_idx, num_hour, pg)
     end
 
     println("segment_max: ", Dates.now())
