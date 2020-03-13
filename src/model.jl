@@ -225,6 +225,43 @@ function _add_cons_interval_ramp(m, case::Case, noninf_ramp_idx, num_hour, pg)
 end
 
 
+"""helper function for _add_cons_branch_limits"""
+function _build_cons_branch_minmax(m, noninf_branch_idx, hour_idx,
+                                   branch_limit, pf)
+    println("branch_min: ", Dates.now())
+    JuMP.@constraint(m,
+        branch_min[br in noninf_branch_idx, h in hour_idx],
+        -1 * branch_limit[br, h] <= pf[br, h])
+    println("branch_max: ", Dates.now())
+    JuMP.@constraint(m,
+        branch_max[br in noninf_branch_idx, h in hour_idx],
+        pf[br, h] <= branch_limit[br, h])
+    return branch_min, branch_max
+end
+
+
+"""without transmission violations"""
+function _add_cons_branch_limits(m, branch_rating, hour_idx, pf)
+    noninf_branch_idx = findall(branch_rating .!= Inf)
+    branch_idx = 1:length(branch_rating)
+    JuMP.@expression(m,
+            branch_limit[br in branch_idx, h in hour_idx], branch_rating[br])
+    branch_min, branch_max = _build_cons_branch_minmax(
+        m, noninf_branch_idx, hour_idx, branch_limit, pf)
+    return branch_min, branch_max
+end
+
+
+"""with transmission violations"""
+function _add_cons_branch_limits(m, branch_rating, hour_idx, pf, trans_viol)
+    noninf_branch_idx = findall(branch_rating .!= Inf)
+    JuMP.@expression(m, branch_limit, branch_rating + trans_viol)
+    branch_min, branch_max = _build_cons_branch_minmax(
+        m, noninf_branch_idx, hour_idx, branch_limit, pf)
+    return branch_min, branch_max
+end
+
+
 """
     _build_model(case=case, start_index=x, interval_length=y[, kwargs...])
 
@@ -258,7 +295,6 @@ function _build_model(; case::Case, storage::Storage,
     num_branch_ac = length(case.branchid)
     num_branch = num_branch_ac + length(case.dclineid)
     branch_idx = 1:num_branch
-    noninf_branch_idx = findall(branch_rating .!= Inf)
     num_gen = length(case.genid)
     gen_idx = 1:num_gen
     end_index = start_index + interval_length - 1
@@ -364,20 +400,12 @@ function _build_model(; case::Case, storage::Storage,
         pg[i, h] == case.gen_pmin[i] + sum(pg_seg[i, :, h]))
 
     if trans_viol_enabled
-        JuMP.@expression(m,
-            branch_limit, branch_rating + trans_viol)
+        branch_min, branch_max = _add_cons_branch_limits(
+            m, branch_rating, hour_idx, pf, trans_viol)
     else
-        JuMP.@expression(m,
-            branch_limit[br in branch_idx, h in hour_idx], branch_rating[br])
+        branch_min, branch_max = _add_cons_branch_limits(
+            m, branch_rating, hour_idx, pf)
     end
-    println("branch_min, branch_max: ", Dates.now())
-    JuMP.@constraint(m,
-        branch_min[br in noninf_branch_idx, h in hour_idx],
-        -1 * branch_limit[br, h] <= pf[br, h])
-    println("branch_max: ", Dates.now())
-    JuMP.@constraint(m,
-        branch_max[br in noninf_branch_idx, h in hour_idx],
-        pf[br, h] <= branch_limit[br, h])
 
     println("branch_angle: ", Dates.now())
     # Explicit numbering here so that we constrain AC branches but not DC
