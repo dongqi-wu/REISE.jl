@@ -247,9 +247,6 @@ function _build_model(; case::Case, storage::Storage,
     SHUTDOWN = 3
     NCOST = 4
     COST = 5
-    # Positional indices from mpc.gen
-    PMAX = 9
-    PMIN = 10
 
     println("building sets: ", Dates.now())
     # Sets
