@@ -30,7 +30,8 @@ re-setting constraint right-hand-side values as necessary.
 function interval_loop(factory_like, model_kwargs::Dict,
                        solver_kwargs::Dict, interval::Int,
                        n_interval::Int, start_index::Int,
-                       inputfolder::String, outputfolder::String)
+                       inputfolder::String, outputfolder::String,
+                       save_offset::Int=0)
     # Bad (but known) statuses to match against
     numeric_statuses = (
         JuMP.MOI.INFEASIBLE_OR_UNBOUNDED, JuMP.MOI.NUMERICAL_ERROR,
@@ -191,7 +192,7 @@ function interval_loop(factory_like, model_kwargs::Dict,
         end
 
         # Save results
-        results_filename = "result_" * string(i-1) * ".mat"
+        results_filename = "result_" * string(i-1+save_offset) * ".mat"
         results_filepath = joinpath(outputfolder, results_filename)
         save_results(results, results_filepath)
 

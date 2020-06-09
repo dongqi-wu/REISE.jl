@@ -45,10 +45,10 @@ Run a scenario consisting of several intervals.
     used by default.
 """
 function run_scenario(;
-        num_segments::Int=1, interval::Int, n_interval::Int, start_index::Int,
+        num_segments::Int=1, interval::Int, n_interval::Int, start_index::Int=1,
         inputfolder::String, outputfolder::Union{String, Nothing}=nothing,
         threads::Union{Int, Nothing}=nothing, optimizer_factory=nothing,
-        solver_kwargs::Union{Dict, Nothing}=nothing)
+        solver_kwargs::Union{Dict, Nothing}=nothing, resume_at::Int=0)
     isnothing(optimizer_factory) && error("optimizer_factory must be specified")
     # Setup things that build once
     # If no solver kwargs passed, instantiate an empty dict
@@ -63,7 +63,13 @@ function run_scenario(;
     storage = read_storage(inputfolder)
     println("All scenario files loaded!")
     case = reise_data_mods(case, num_segments=num_segments)
-    save_input_mat(case, storage, inputfolder, outputfolder)
+    # If using `resume_at`, adjust indices as appropriate, and don't save input.mat
+    if resume_at != 0
+        n_interval -= resume_at
+        start_index += interval * resume_at
+    else
+        save_input_mat(case, storage, inputfolder, outputfolder)
+    end
     model_kwargs = Dict(
         "case" => case,
         "storage" => storage,
@@ -77,7 +83,7 @@ function run_scenario(;
     redirect_stdout_stderr(stdout_filepath, stderr_filepath) do
         # Loop through intervals
         m = interval_loop(optimizer_factory, model_kwargs, solver_kwargs, interval,
-                          n_interval, start_index, inputfolder, outputfolder)
+                          n_interval, start_index, inputfolder, outputfolder, resume_at)
     end
     return m
 end
