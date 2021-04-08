@@ -46,7 +46,7 @@ function get_results(f::Float64, voi::VariablesOfInterest, case::Case)::Results
             rethrow(e)
         end
     end
-    
+
     # This variable will only be in the results if load shedding is enabled
     # Initialize with empty arrays, to be discarded later if they stay empty
     load_shed = zeros(0, 0)
@@ -64,9 +64,21 @@ function get_results(f::Float64, voi::VariablesOfInterest, case::Case)::Results
         end
     end
 
+    trans_viol = zeros(0, 0)
+    try
+        trans_viol = JuMP.value.(voi.trans_viol)
+    catch e
+        if isa(e, MethodError)
+            # Thrown when trans_viol is `nothing`
+        else
+            # Unknown error, rethrow it
+            rethrow(e)
+        end
+    end
+
     results = Results(;
         pg=pg, pf=pf, lmp=lmp, congl=congl, congu=congu, pf_dcline=pf_dcline,
         f=f, storage_pg=storage_pg, storage_e=storage_e, load_shed=load_shed,
-        status=status)
+        trans_viol=trans_viol, status=status)
     return results
 end
