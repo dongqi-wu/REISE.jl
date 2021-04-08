@@ -68,6 +68,8 @@ function run_scenario(;
         "case" => case,
         "storage" => storage,
         "interval_length" => interval,
+        "trans_viol_enabled" => true,
+        "trans_viol_penalty" => 8000,
         )
     # If a number of threads is specified, add to solver settings dict
     isnothing(threads) || (solver_kwargs["Threads"] = threads)
