@@ -332,8 +332,14 @@ function _build_model(m::JuMP.Model; case::Case, storage::Storage,
         pg[i, h] == case.gen_pmin[i] + sum(pg_seg[i, :, h]))
 
     if trans_viol_enabled
-        JuMP.@expression(m, branch_limit_pmin, branch_pmin - trans_viol)
-        JuMP.@expression(m, branch_limit_pmax, branch_pmax + trans_viol)
+        JuMP.@expression(m,
+            branch_limit_pmin[br in sets.branch_idx, h in hour_idx],
+            branch_pmin[br] - trans_viol[br, h]
+        )
+        JuMP.@expression(m,
+            branch_limit_pmax[br in sets.branch_idx, h in hour_idx],
+            branch_pmax[br] + trans_viol[br, h]
+        )
     else
         JuMP.@expression(m,
             branch_limit_pmin[br in sets.branch_idx, h in hour_idx],
