@@ -404,6 +404,7 @@ function _build_model(m::JuMP.Model; case::Case, storage::Storage,
     println(Dates.now())
     # For non-existent variables/constraints, define as `nothing`
     load_shed = load_shed_enabled ? load_shed : nothing
+    trans_viol = trans_viol_enabled ? trans_viol : nothing
     storage_dis = storage_enabled ? storage_dis : nothing
     storage_chg = storage_enabled ? storage_chg : nothing
     storage_soc = storage_enabled ? storage_soc : nothing
@@ -412,8 +413,8 @@ function _build_model(m::JuMP.Model; case::Case, storage::Storage,
     initial_rampdown = initial_ramp_enabled ? initial_rampdown : nothing
     voi = VariablesOfInterest(;
         # Variables
-        pg=pg, pf=pf, load_shed=load_shed, storage_soc=storage_soc,
-        storage_dis=storage_dis, storage_chg=storage_chg,
+        pg=pg, pf=pf, load_shed=load_shed, trans_viol=trans_viol,
+        storage_soc=storage_soc, storage_dis=storage_dis, storage_chg=storage_chg,
         # Constraints
         branch_min=branch_min, branch_max=branch_max,
         powerbalance=powerbalance, initial_soc=initial_soc,
