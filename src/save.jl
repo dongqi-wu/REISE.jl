@@ -94,6 +94,10 @@ function save_results(results::Results, filename::String;
         mdo_save["flow"]["mpc"]["load_shed"] = Dict(
             "load_shed" => results.load_shed)
     end
+    if size(results.trans_viol) != (0, 0)
+        mdo_save["flow"]["mpc"]["trans_viol"] = Dict(
+            "trans_viol" => results.trans_viol)
+    end
     MAT.matwrite(filename, Dict("mdo_save" => mdo_save); compress=true)
 end
 
