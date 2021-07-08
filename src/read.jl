@@ -131,32 +131,6 @@ function read_demand_flexibility(filepath)::DemandFlexibility
         demand_flexibility["interval_balance"] = true
         demand_flexibility["rolling_balance"] = true
 
-        # Try reading the cost for down-shifting loads
-        try 
-            println("...loading demand flexibility down-shift cost profiles")
-            demand_flexibility["cost_dn"] = CSV.File(
-                joinpath(filepath, "demand_flexibility_cost_dn.csv")
-            ) |> DataFrames.DataFrame
-        catch e
-            println(
-                "Demand flexibility down-shift cost profiles not found in " * filepath
-            )
-            demand_flexibility["cost_dn"] = nothing
-        end
-
-         # Try reading the cost for up-shifting loads
-        try 
-            println("...loading demand flexibility up-shift cost profiles")
-            demand_flexibility["cost_up"] = CSV.File(
-                joinpath(filepath, "demand_flexibility_cost_up.csv")
-            ) |> DataFrames.DataFrame
-        catch e
-            println(
-                "Demand flexibility up-shift cost profiles not found in " * filepath
-            )
-            demand_flexibility["cost_up"] = nothing
-        end
-
         # Try loading the demand flexibility parameters
         demand_flexibility_parameters = DataFrames.DataFrame()
         try
@@ -199,6 +173,32 @@ function read_demand_flexibility(filepath)::DemandFlexibility
                 "Demand flexibility parameters will default to allowing demand "
                 * "flexibility to occur."
             )
+        end
+        
+        # Try reading the cost for down-shifting loads
+        try 
+            demand_flexibility["cost_dn"] = CSV.File(
+                joinpath(filepath, "demand_flexibility_cost_dn.csv")
+            ) |> DataFrames.DataFrame
+            println("...loading demand flexibility down-shift cost profiles")
+        catch e
+            println(
+                "Demand flexibility down-shift cost profiles not found in " * filepath
+            )
+            demand_flexibility["cost_dn"] = nothing
+        end
+
+        # Try reading the cost for up-shifting loads
+        try 
+            demand_flexibility["cost_up"] = CSV.File(
+                joinpath(filepath, "demand_flexibility_cost_up.csv")
+            ) |> DataFrames.DataFrame
+            println("...loading demand flexibility up-shift cost profiles")
+        catch e
+            println(
+                "Demand flexibility up-shift cost profiles not found in " * filepath
+            )
+            demand_flexibility["cost_up"] = nothing
         end
     end
 
