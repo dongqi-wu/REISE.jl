@@ -263,14 +263,14 @@ function _build_model(
             case, demand_flexibility, start_index, end_index
         )
         if !isnothing(demand_flexibility.cost_up)
-            bus_demand_flex_cost_up_amt = transpose(
+            bus_demand_flex_cost_up = permutedims(
                 Matrix(
                     demand_flexibility.cost_up[start_index:end_index, 2:end]
                 )
             )
         end
         if !isnothing(demand_flexibility.cost_dn)
-            bus_demand_flex_cost_dn_amt = transpose(
+            bus_demand_flex_cost_dn = permutedims(
                 Matrix(
                     demand_flexibility.cost_dn[start_index:end_index, 2:end]
                 )
@@ -548,14 +548,14 @@ function _build_model(
         # cost for increasing flexible load
         if !isnothing(demand_flexibility.cost_up)
             demand_response_penalty_up = JuMP.@expression(
-                m, sum(sum(bus_demand_flex_cost_up_amt .* load_shift_up))
+                m, sum(sum(bus_demand_flex_cost_up .* load_shift_up))
             )
             JuMP.add_to_expression!(obj, demand_response_penalty_up)
         end
         # cost for decreasing flexible load
         if !isnothing(demand_flexibility.cost_dn)
             demand_response_penalty_dn = JuMP.@expression(
-                m, sum(sum(bus_demand_flex_cost_dn_amt .* load_shift_dn))
+                m, sum(sum(bus_demand_flex_cost_dn .* load_shift_dn))
             )
             JuMP.add_to_expression!(obj, demand_response_penalty_dn)
         end

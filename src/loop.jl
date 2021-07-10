@@ -57,6 +57,22 @@ function interval_loop(factory_like, model_kwargs::Dict,
             bus_flex_amt = _make_bus_demand_flexibility_amount(
                 case, demand_flexibility, interval_start, interval_end
             )
+
+            if !isnothing(demand_flexibility.cost_up)
+                bus_demand_flex_cost_up = permutedims(
+                    Matrix(
+                        demand_flexibility.cost_up[interval_start:interval_end, 2:end]
+                    )
+                )
+            end
+
+            if !isnothing(demand_flexibility.cost_dn)
+                bus_demand_flex_cost_dn = permutedims(
+                    Matrix(
+                        demand_flexibility.cost_dn[interval_start:interval_end, 2:end]
+                    )
+                )
+            end
         end
         if i == 1
             # Build a model with no initial ramp constraint
@@ -130,6 +146,18 @@ function interval_loop(factory_like, model_kwargs::Dict,
                     JuMP.set_upper_bound(
                         voi.load_shift_dn[i, t], bus_flex_amt[sets.load_bus_idx[i], t]
                     )
+
+                    if !isnothing(demand_flexibility.cost_up)
+                        JuMP.set_objective_coefficient(
+                            m, voi.load_shift_up[i, t], bus_demand_flex_cost_up[i, t]
+                        )
+                    end
+
+                    if !isnothing(demand_flexibility.cost_dn)
+                        JuMP.set_objective_coefficient(
+                            m, voi.load_shift_dn[i, t], bus_demand_flex_cost_dn[i, t]
+                        )
+                    end
                 end
             end
         end
